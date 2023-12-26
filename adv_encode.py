@@ -141,7 +141,13 @@ def A1111_renorm(base_emb, weighted_emb):
     embeddings_final = (base_emb.mean() / weighted_emb.mean()) * weighted_emb
     return embeddings_final
 
+def call_clip_encode(clip, tokens, tokens_g):
+    wrap_tokens = {'l': tokens} if tokens_g is None else {'l': tokens, 'g': tokens_g}
+    return clip.encode_from_tokens(wrap_tokens, return_pooled=True)
+
 def advanced_encode_from_tokens(clip, tokenized, token_normalization, weight_interpretation, w_max=1.0):
+    tokenized_g = tokenized.get('g', None)
+    tokenized = tokenized['l']
     tokens = [[t for t,_,_ in x] for x in tokenized]
     weights = [[w for _,w,_ in x] for x in tokenized]
     word_ids = [[wid for _,_,wid in x] for x in tokenized]
@@ -162,10 +168,10 @@ def advanced_encode_from_tokens(clip, tokenized, token_normalization, weight_int
 
     if weight_interpretation == "comfy":
         weighted_tokens = [[(t,w) for t, w in zip(x, y)] for x, y in zip(tokens, weights)]
-        weighted_emb = clip.encode_from_tokens(weighted_tokens)
+        weighted_emb,pooled = call_clip_encode(clip, weighted_tokens, tokenized_g)
     else:
         unweighted_tokens = [[(t,1.0) for t, _,_ in x] for x in tokenized]
-        base_emb = clip.encode_from_tokens(unweighted_tokens)
+        base_emb,pooled = call_clip_encode(clip, unweighted_tokens, tokenized_g)
     
     if weight_interpretation == "A1111":
         weighted_emb = from_zero(weights, base_emb)
@@ -173,7 +179,7 @@ def advanced_encode_from_tokens(clip, tokenized, token_normalization, weight_int
     
     if weight_interpretation == "compel":
         pos_tokens = [[(t,w) if w >= 1.0 else (t,1.0) for t, w in zip(x, y)] for x, y in zip(tokens, weights)]
-        weighted_emb = clip.encode_from_tokens(pos_tokens)
+        weighted_emb = call_clip_encode(pos_tokens, tokenized_g)
         weighted_emb = down_weight(pos_tokens, weights, word_ids, weighted_emb, clip)
     
     if weight_interpretation == "comfy++":
@@ -185,7 +191,7 @@ def advanced_encode_from_tokens(clip, tokenized, token_normalization, weight_int
         weights = scale_to_norm(weights, word_ids, w_max)
         weighted_emb = down_weight(unweighted_tokens, weights, word_ids, base_emb, clip)
 
-    return weighted_emb
+    return weighted_emb,pooled
 
 def advanced_encode(clip, text, token_normalization, weight_interpretation, w_max=1.0):
     tokenized = clip.tokenize(text, return_word_ids=True)

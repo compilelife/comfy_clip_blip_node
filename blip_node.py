@@ -186,11 +186,11 @@ class BlipConcat:
             print(f"\033[34mPrompt:\033[0m", text)
 
             # Encode text with custom weights
-            embeddings_final = advanced_encode(
+            embeddings_final, pooled = advanced_encode(
                 clip, text, token_normalization, weight_interpretation, w_max=1.0
             )
 
-            return ([[embeddings_final, {}]],)
+            return ([[embeddings_final, {"pooled_output": pooled}]],)
 
 
 NODE_CLASS_MAPPINGS = {"CLIPTextEncodeBLIP": BlipConcat}
